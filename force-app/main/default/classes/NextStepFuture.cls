@@ -70,26 +70,40 @@ public with sharing class NextStepFuture {
     */
     //Mix DML Error happens when you try to perform DML operations on setup and non-setup objects in a single transaction.
     public static void createDealAndUpdateRole() {
-        Opportunity bigDeal = new Opportunity();
-        insertBigDeal(bigDeal);
+        // update method to bulkify an Opportunity creation.
+        insertBigDeal(1);
 
-        UserRole[] roles = [SELECT Id, Name FROM UserRole WHERE Id = :UserInfo.getUserRoleId() OR Name = 'CRO' LIMIT 1];
-        updateUserRoleName(roles);
+        // call future method to separate transactions
+        updateUserRoleName();
     }
 
-    // Helper method to insert big deal
-    private static void insertBigDeal(Opportunity opp) {
-        opp.Amount = 1000000;
-        opp.Name = 'Big Deal';
-        opp.StageName = 'Closed Won'; 
-        opp.CloseDate = Date.today();
-        
-        insert opp;
+    // Helper method to insert big deals
+    private static void insertBigDeal(Integer numOpps) {
+        List<Opportunity> bigDeals = new List<Opportunity>();
+        for (Integer i = 0; i < numOpps; i++) {
+            Opportunity opp = new Opportunity();
+            opp.Amount = 1000000;
+            opp.Name = 'Big Deal';
+            opp.StageName = 'Closed Won'; 
+            opp.CloseDate = Date.today();
+            bigDeals.add(opp);
+        }
+        if (bigDeals.size()> 0) {
+            Database.insert(bigDeals);
+        }
     }
-
 
     // Helper method to update role name
-    private static void updateUserRoleName(UserRole[] roles){
+    @future
+    private static void updateUserRoleName(){
+        UserRole[] roles = [
+            SELECT Id, Name 
+            FROM UserRole 
+            WHERE Id = :UserInfo.getUserRoleId() OR Name = 'CRO' 
+            WITH SECURITY_ENFORCED
+            LIMIT 1
+        ];
+        
         UserRole role;
         if (roles.isEmpty()) {
             role = new UserRole();
@@ -102,6 +116,10 @@ public with sharing class NextStepFuture {
 
         role.Name = 'CRO';
 
-        upsert role;
+        // Tried to bypass ApexCRUDViolation, but it doesn't help. I don't know why.
+        Schema.DescribeSObjectResult sor = UserRole.SObjectType.getDescribe();
+        if (sor.isCreateable() && sor.isUpdateable()) {
+            Database.upsert(role);
+        }
     }
 }
