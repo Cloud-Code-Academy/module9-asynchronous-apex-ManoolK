@@ -27,9 +27,40 @@ public with sharing class NextStepFuture {
      * Opportunity Next Step field is a standard field
      * Update the corresponding test class AsynchronousTest and test method nextStepFuture_testUpdateAllNextStep to cover test this method
      */
-    //[public | private ] [static] data_type method_name (input parameters) {
-    //  The body of the method
-    //}
+    @future
+    public static void updateAllNextStep(String nextStep) {
+        // Update all accounts next step
+        updateAccountsNextStep(nextStep);
+
+        // Update all opportunities next step
+        updateOpportunitiesNextStep(nextStep);
+    }
+
+    // Helper method to update all Accounts Next Step field
+    private static void updateAccountsNextStep(String nextStep) {
+        List<Account> accounts = [
+            SELECT Id, Next_Step__c
+            FROM Account
+            WHERE Next_Step__c != :nextStep
+        ];
+        for (Account acc : accounts) {
+            acc.Next_Step__c = nextStep;
+        }
+        Database.update(accounts);
+    }
+
+    // Helper method to update all Opportunities Next Step field
+    private static void updateOpportunitiesNextStep(String nextStep) {
+        List<Opportunity> opps = [
+            SELECT Id, NextStep
+            FROM Opportunity
+            WHERE NextStep != :nextStep
+        ];
+        for (Opportunity opp : opps) {
+            opp.NextStep = nextStep;
+        }
+        Database.update(opps);
+    }
 
     /*
     * Question 2
