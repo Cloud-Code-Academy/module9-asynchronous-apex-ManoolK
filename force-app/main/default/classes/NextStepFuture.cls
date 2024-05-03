@@ -27,9 +27,40 @@ public with sharing class NextStepFuture {
      * Opportunity Next Step field is a standard field
      * Update the corresponding test class AsynchronousTest and test method nextStepFuture_testUpdateAllNextStep to cover test this method
      */
-    //[public | private ] [static] data_type method_name (input parameters) {
-    //  The body of the method
-    //}
+    @future
+    public static void updateAllNextStep(String nextStep) {
+        // Update all accounts next step
+        updateAccountsNextStep(nextStep);
+
+        // Update all opportunities next step
+        updateOpportunitiesNextStep(nextStep);
+    }
+
+    // Helper method to update all Accounts Next Step field
+    private static void updateAccountsNextStep(String nextStep) {
+        List<Account> accounts = [
+            SELECT Id, Next_Step__c
+            FROM Account
+            WHERE Next_Step__c != :nextStep
+        ];
+        for (Account acc : accounts) {
+            acc.Next_Step__c = nextStep;
+        }
+        Database.update(accounts);
+    }
+
+    // Helper method to update all Opportunities Next Step field
+    private static void updateOpportunitiesNextStep(String nextStep) {
+        List<Opportunity> opps = [
+            SELECT Id, NextStep
+            FROM Opportunity
+            WHERE NextStep != :nextStep
+        ];
+        for (Opportunity opp : opps) {
+            opp.NextStep = nextStep;
+        }
+        Database.update(opps);
+    }
 
     /*
     * Question 2
@@ -39,26 +70,40 @@ public with sharing class NextStepFuture {
     */
     //Mix DML Error happens when you try to perform DML operations on setup and non-setup objects in a single transaction.
     public static void createDealAndUpdateRole() {
-        Opportunity bigDeal = new Opportunity();
-        insertBigDeal(bigDeal);
+        // update method to bulkify an Opportunity creation.
+        insertBigDeal(1);
 
-        UserRole[] roles = [SELECT Id, Name FROM UserRole WHERE Id = :UserInfo.getUserRoleId() OR Name = 'CRO' LIMIT 1];
-        updateUserRoleName(roles);
+        // call future method to separate transactions
+        updateUserRoleName();
     }
 
-    // Helper method to insert big deal
-    private static void insertBigDeal(Opportunity opp) {
-        opp.Amount = 1000000;
-        opp.Name = 'Big Deal';
-        opp.StageName = 'Closed Won'; 
-        opp.CloseDate = Date.today();
-        
-        insert opp;
+    // Helper method to insert big deals
+    private static void insertBigDeal(Integer numOpps) {
+        List<Opportunity> bigDeals = new List<Opportunity>();
+        for (Integer i = 0; i < numOpps; i++) {
+            Opportunity opp = new Opportunity();
+            opp.Amount = 1000000;
+            opp.Name = 'Big Deal';
+            opp.StageName = 'Closed Won'; 
+            opp.CloseDate = Date.today();
+            bigDeals.add(opp);
+        }
+        if (bigDeals.size()> 0) {
+            Database.insert(bigDeals);
+        }
     }
-
 
     // Helper method to update role name
-    private static void updateUserRoleName(UserRole[] roles){
+    @future
+    private static void updateUserRoleName(){
+        UserRole[] roles = [
+            SELECT Id, Name 
+            FROM UserRole 
+            WHERE Id = :UserInfo.getUserRoleId() OR Name = 'CRO' 
+            WITH SECURITY_ENFORCED
+            LIMIT 1
+        ];
+        
         UserRole role;
         if (roles.isEmpty()) {
             role = new UserRole();
@@ -71,6 +116,10 @@ public with sharing class NextStepFuture {
 
         role.Name = 'CRO';
 
-        upsert role;
+        // Tried to bypass ApexCRUDViolation, but it doesn't help. I don't know why.
+        Schema.DescribeSObjectResult sor = UserRole.SObjectType.getDescribe();
+        if (sor.isCreateable() && sor.isUpdateable()) {
+            Database.upsert(role);
+        }
     }
 }
